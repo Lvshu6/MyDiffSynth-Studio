@@ -78,7 +78,23 @@ class ModelPool:
                 loaded = True
         if not loaded:
             raise ValueError(f"Cannot detect the model type. File: {path}. Model hash: {model_hash}")
-    
+    def load_from_config(self, model_config, vram_config=None, vram_limit=None, clear_parameters=False):
+        print(f"Loading models from: {json.dumps(model_config['path'], indent=4)}")
+        if vram_config is None:
+            vram_config = self.default_vram_config()
+        loaded = False
+        model = self.load_model_file(model_config, model_config["path"], vram_config, vram_limit=vram_limit)
+        if clear_parameters: self.clear_parameters(model)
+        self.model.append(model)
+        model_name = model_config["model_name"]
+        self.model_name.append(model_name)
+        self.model_path.append(model_config["path"])
+        model_info = {"model_name": model_name, "model_class": model_config["model_class"], "extra_kwargs": model_config.get("extra_kwargs")}
+        print(f"Loaded model: {json.dumps(model_info, indent=4)},Model Hash: {hash_model_file(model_config['path'])}")
+        loaded = True
+        if not loaded:
+            raise ValueError(f"Cannot detect the model type. File: {model_config['path']}. Model hash: {hash_model_file(model_config['path'])}")
+
     def fetch_model(self, model_name, index=None):
         fetched_models = []
         fetched_model_paths = []

@@ -1,3 +1,4 @@
+import cv2
 import torch, types
 import numpy as np
 from PIL import Image
@@ -11,7 +12,6 @@ from typing import Optional
 from typing_extensions import Literal
 from transformers import Wav2Vec2Processor
 
-from ..core.device.npu_compatible_device import get_device_type
 from ..diffusion import FlowMatchScheduler
 from ..core import ModelConfig, gradient_checkpoint_forward
 from ..diffusion.base_pipeline import BasePipeline, PipelineUnit
@@ -24,6 +24,9 @@ from ..models.wan_video_image_encoder import WanImageEncoder
 from ..models.wan_video_vace import VaceWanModel
 from ..models.wan_video_motion_controller import WanMotionControllerModel
 from ..models.wan_video_animate_adapter import WanAnimateAdapter
+
+from ..models.wan_video_flow_line_adapter import WanFlowLineAdapter
+
 from ..models.wan_video_mot import MotWanModel
 from ..models.wav2vec import WanS2VAudioEncoder
 from ..models.longcat_video_dit import LongCatVideoTransformer3DModel
@@ -31,7 +34,7 @@ from ..models.longcat_video_dit import LongCatVideoTransformer3DModel
 
 class WanVideoPipeline(BasePipeline):
 
-    def __init__(self, device=get_device_type(), torch_dtype=torch.bfloat16):
+    def __init__(self, device="cuda", torch_dtype=torch.bfloat16):
         super().__init__(
             device=device, torch_dtype=torch_dtype,
             height_division_factor=16, width_division_factor=16, time_division_factor=4, time_division_remainder=1
@@ -49,9 +52,12 @@ class WanVideoPipeline(BasePipeline):
         self.vace2: VaceWanModel = None
         self.vap: MotWanModel = None
         self.animate_adapter: WanAnimateAdapter = None
+        
+        self.flow_line_adapter: WanFlowLineAdapter = None
+
         self.audio_encoder: WanS2VAudioEncoder = None
-        self.in_iteration_models = ("dit", "motion_controller", "vace", "animate_adapter", "vap")
-        self.in_iteration_models_2 = ("dit2", "motion_controller", "vace2", "animate_adapter", "vap")
+        self.in_iteration_models = ("dit", "motion_controller", "vace", "animate_adapter","flow_line_adapter", "vap")
+        self.in_iteration_models_2 = ("dit2", "motion_controller", "vace2", "animate_adapter","flow_line_adapter", "vap")
         self.units = [
             WanVideoUnit_ShapeChecker(),
             WanVideoUnit_NoiseInitializer(),
@@ -70,6 +76,9 @@ class WanVideoPipeline(BasePipeline):
             WanVideoUnit_AnimatePoseLatents(),
             WanVideoUnit_AnimateFacePixelValues(),
             WanVideoUnit_AnimateInpaint(),
+            
+            WanVideoUnit_FlowLine(),
+
             WanVideoUnit_VAP(),
             WanVideoUnit_UnifiedSequenceParallel(),
             WanVideoUnit_TeaCache(),
@@ -99,7 +108,7 @@ class WanVideoPipeline(BasePipeline):
     @staticmethod
     def from_pretrained(
         torch_dtype: torch.dtype = torch.bfloat16,
-        device: Union[str, torch.device] = get_device_type(),
+        device: Union[str, torch.device] = "cuda",
         model_configs: list[ModelConfig] = [],
         tokenizer_config: ModelConfig = ModelConfig(model_id="Wan-AI/Wan2.1-T2V-1.3B", origin_file_pattern="google/umt5-xxl/"),
         audio_processor_config: ModelConfig = None,
@@ -134,6 +143,16 @@ class WanVideoPipeline(BasePipeline):
         pipe = WanVideoPipeline(device=device, torch_dtype=torch_dtype)
         model_pool = pipe.download_and_load_models(model_configs, vram_limit)
         
+        # Load Custom models 光流模型
+        flow_config={
+            "path": "models/FlowLineAdapter/flow_line_adapter.safetensors",         
+            "model_name": "wan_video_flow_line_adapter",
+            "model_class": "diffsynth.models.wan_video_flow_line_adapter.WanFlowLineAdapter",
+            "state_dict_converter": "diffsynth.utils.state_dict_converters.wan_video_flow_line_adapter.WanFlowLineAdapterStateDictConverter",
+            
+        }
+        model_pool.load_from_config(flow_config)
+        pipe.flow_line_adapter = model_pool.fetch_model("wan_video_flow_line_adapter")
         # Fetch models
         pipe.text_encoder = model_pool.fetch_model("wan_video_text_encoder")
         dit = model_pool.fetch_model("wan_video_dit", index=2)
@@ -211,6 +230,8 @@ class WanVideoPipeline(BasePipeline):
         animate_face_video: Optional[list[Image.Image]] = None,
         animate_inpaint_video: Optional[list[Image.Image]] = None,
         animate_mask_video: Optional[list[Image.Image]] = None,
+        #FlowLine
+        flow_line = None,
         # VAP
         vap_video: Optional[list[Image.Image]] = None,
         vap_prompt: Optional[str] = " ",
@@ -279,6 +300,9 @@ class WanVideoPipeline(BasePipeline):
             "sliding_window_size": sliding_window_size, "sliding_window_stride": sliding_window_stride,
             "input_audio": input_audio, "audio_sample_rate": audio_sample_rate, "s2v_pose_video": s2v_pose_video, "audio_embeds": audio_embeds, "s2v_pose_latents": s2v_pose_latents, "motion_video": motion_video,
             "animate_pose_video": animate_pose_video, "animate_face_video": animate_face_video, "animate_inpaint_video": animate_inpaint_video, "animate_mask_video": animate_mask_video,
+            
+            "flow_line": flow_line,
+
             "vap_video": vap_video, 
         }
         for unit in self.units:
@@ -965,7 +989,7 @@ class WanVideoUnit_AnimateInpaint(PipelineUnit):
             onload_model_names=("vae",)
         )
         
-    def get_i2v_mask(self, lat_t, lat_h, lat_w, mask_len=1, mask_pixel_values=None, device=get_device_type()):
+    def get_i2v_mask(self, lat_t, lat_h, lat_w, mask_len=1, mask_pixel_values=None, device="cuda"):
         if mask_pixel_values is None:
             msk = torch.zeros(1, (lat_t-1) * 4 + 1, lat_h, lat_w, device=device)
         else:
@@ -999,6 +1023,27 @@ class WanVideoUnit_AnimateInpaint(PipelineUnit):
         y_reft = torch.concat([msk_reft, y_reft]).to(dtype=torch.bfloat16, device=pipe.device)
         y = torch.concat([y_ref, y_reft], dim=1).unsqueeze(0)
         return {"y": y}
+
+
+class WanVideoUnit_FlowLine(PipelineUnit):
+    def __init__(self):
+        super().__init__(
+            input_params=("flow_line", "tiled", "tile_size", "tile_stride", "height", "width"),
+            onload_model_names=("vae",)
+        )
+
+    def process(self, pipe: WanVideoPipeline, flow_line, tiled, tile_size, tile_stride,height,width):
+               
+        if flow_line is None:
+            return {}
+        pipe.load_models_to_device(self.onload_model_names)
+        
+        flow_line= [img.resize((width, height)) for img in flow_line]
+        flow_line = pipe.preprocess_video(flow_line)
+        # flow_line = self.preprocess_video(flow_line, torch_dtype=pipe.torch_dtype, device=pipe.device)
+        flow_latents = pipe.vae.encode(flow_line, device=pipe.device, tiled=tiled, tile_size=tile_size, tile_stride=tile_stride).to(dtype=pipe.torch_dtype, device=pipe.device)
+        return {"flow_latents": flow_latents}
+
 
 
 class WanVideoUnit_LongCatVideo(PipelineUnit):
@@ -1130,6 +1175,9 @@ def model_fn_wan_video(
     vace: VaceWanModel = None,
     vap: MotWanModel = None,
     animate_adapter: WanAnimateAdapter = None,
+    
+    flow_line_adapter: WanFlowLineAdapter = None,
+
     latents: torch.Tensor = None,
     timestep: torch.Tensor = None,
     context: torch.Tensor = None,
@@ -1149,6 +1197,9 @@ def model_fn_wan_video(
     use_unified_sequence_parallel: bool = False,
     motion_bucket_id: Optional[torch.Tensor] = None,
     pose_latents=None,
+    
+    flow_latents=None,
+
     face_pixel_values=None,
     longcat_latents=None,
     sliding_window_size: Optional[int] = None,
@@ -1260,7 +1311,11 @@ def model_fn_wan_video(
     # Animate
     if pose_latents is not None and face_pixel_values is not None:
         x, motion_vec = animate_adapter.after_patch_embedding(x, pose_latents, face_pixel_values)
-    
+
+    #FlowLine
+    if flow_latents is not None :
+        x = flow_line_adapter.after_patch_embedding(x, flow_latents)
+
     # Patchify
     f, h, w = x.shape[2:]
     x = rearrange(x, 'b c f h w -> b (f h w) c').contiguous()

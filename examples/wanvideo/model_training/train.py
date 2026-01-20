@@ -5,7 +5,7 @@ from diffsynth.pipelines.wan_video import WanVideoPipeline, ModelConfig
 from diffsynth.diffusion import *
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-
+division_factor = 32
 class WanTrainingModule(DiffusionTrainingModule):
     def __init__(
         self,
@@ -137,8 +137,8 @@ if __name__ == "__main__":
             max_pixels=args.max_pixels,
             height=args.height,
             width=args.width,
-            height_division_factor=16,
-            width_division_factor=16,
+            height_division_factor=division_factor,
+            width_division_factor=division_factor,
             num_frames=args.num_frames,
             time_division_factor=4,
             time_division_remainder=1,
