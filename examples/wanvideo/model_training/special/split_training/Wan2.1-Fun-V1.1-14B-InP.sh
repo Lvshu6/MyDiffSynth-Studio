@@ -16,11 +16,12 @@
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
 
 nohup accelerate launch \
+  --config_file examples/wanvideo/model_training/full/accelerate_config_14B.yaml \
   examples/wanvideo/model_training/train.py \
   --dataset_base_path ./models/train/Wan2.1-Fun-V1.1-14B-InP_full_split_cache \
   --data_file_keys "video,flow_line" \
   --dataset_repeat 20 \
-  --model_id_with_origin_paths "PAI/Wan2.1-Fun-V1.1-14B-InP:diffusion_pytorch_model*.safetensors,PAI/Wan2.1-Fun-V1.1-14B-InP:models_t5_umt5-xxl-enc-bf16.pth,PAI/Wan2.1-Fun-V1.1-14B-InP:Wan2.1_VAE.pth,PAI/Wan2.1-Fun-V1.1-14B-InP:models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth" \
+  --model_id_with_origin_paths "PAI/Wan2.1-Fun-V1.1-14B-InP:diffusion_pytorch_model*.safetensors" \
   --learning_rate 1e-5 \
   --num_epochs 25 \
   --remove_prefix_in_ckpt "pipe.flow_line_adapter." \

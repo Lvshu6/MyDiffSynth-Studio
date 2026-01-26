@@ -39,10 +39,10 @@ class WanFlowLineAdapter(nn.Module):
         stage_blocks = [3, 4, 6, 3]
         #5B:48,stage_channels = [128, 256, 512, 1024,2048]  # 通道逐步扩展
         #14B:[256, 512, 1024, 2048,4096]
-        stage_channels = [128, 256, 512, 1024,2048]  # 通道逐步扩展
+        stage_channels = [256, 512, 1024, 2048,4096]  # 通道逐步扩展
 
         blocks = []
-        in_ch = 48
+        in_ch = 16
         for stage_idx, num_blocks in enumerate(stage_blocks):
             out_ch = stage_channels[stage_idx]
             for b in range(num_blocks):
@@ -52,7 +52,7 @@ class WanFlowLineAdapter(nn.Module):
         self.flow_line_blocks = nn.ModuleList(blocks)
 
         # 最终投影到 14B:5120,5B:3072
-        self.flow_line_patch_embedding = nn.Conv3d(in_ch, 3072, kernel_size=(1,2,2), stride=(1,2,2))
+        self.flow_line_patch_embedding = nn.Conv3d(in_ch, 5120, kernel_size=(1,2,2), stride=(1,2,2))
 
     def after_patch_embedding(self, x: torch.Tensor, flow_line_latents: torch.Tensor):
         for block in self.flow_line_blocks:
