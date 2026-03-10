@@ -40,7 +40,14 @@ def process_pair_video(track_path: Path, flow_path: Path, output_base: Path):
 
     total = len(track_frames)
     chunk_size = 5
-    num_chunks = (total + chunk_size - 1) // chunk_size  # 向上取整
+    num_chunks = total// chunk_size + (1 if total % chunk_size else 0)  # 向上取整
+    if total == chunk_size:
+        save_name = track_path.name
+        
+        iio.imwrite(output_base / "track" / save_name, track_frames, fps=5, codec="h264", quality=10)
+        iio.imwrite(output_base / "flow_line" / save_name, flow_frames, fps=5, codec="h264", quality=10)
+
+        return
 
     for idx in range(num_chunks):
         start = idx * chunk_size
@@ -59,7 +66,7 @@ def process_pair_video(track_path: Path, flow_path: Path, output_base: Path):
         iio.imwrite(output_base / "flow_line" / save_name, f_padded, fps=5, codec="h264", quality=10)
 
 def main():
-    base = Path("data/new2")
+    base = Path("data/newtrack")
     flow = Path("flow_line")
     flow=base / flow.name
     output_dir = base / "f5"

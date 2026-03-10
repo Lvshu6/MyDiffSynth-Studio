@@ -5,12 +5,12 @@ import pandas as pd
 
 # -------------------------- 配置参数 --------------------------
 #example_video_dataset
-BASE_PATH = "data/f5/track"  # 数据集根目录
+BASE_PATH = "data/near_model/f5_17"  # 数据集根目录
 config = Path(BASE_PATH) / "config"
 config.mkdir(parents=True, exist_ok=True)
 
 FOLDER_PATH = ""  # 媒体文件夹（相对于 BASE_PATH，仅处理该目录下的文件）
-METADATA_SAVE_PATH = "data/f5/track/config/metadata.csv"  # Metadata 保存路径
+METADATA_SAVE_PATH =BASE_PATH + "/config/metadata.csv"  # Metadata 保存路径
 
 # 预处理参数
 TARGET_H = 512

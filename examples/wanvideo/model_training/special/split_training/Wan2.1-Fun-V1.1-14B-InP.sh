@@ -1,7 +1,7 @@
 # nohup accelerate launch \
 #   examples/wanvideo/model_training/train.py \
-#   --dataset_base_path data/track \
-#   --dataset_metadata_path data/track/config/metadata.csv \
+#   --dataset_base_path data/near_model/f5_17 \
+#   --dataset_metadata_path data/near_model/f5_17/config/metadata.csv \
 #   --data_file_keys "video,flow_line" \
 #   --dataset_repeat 1 \
 #   --model_id_with_origin_paths "PAI/Wan2.1-Fun-V1.1-14B-InP:diffusion_pytorch_model*.safetensors,PAI/Wan2.1-Fun-V1.1-14B-InP:models_t5_umt5-xxl-enc-bf16.pth,PAI/Wan2.1-Fun-V1.1-14B-InP:Wan2.1_VAE.pth,PAI/Wan2.1-Fun-V1.1-14B-InP:models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth" \
@@ -16,7 +16,6 @@
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
 
 nohup accelerate launch \
-  --config_file examples/wanvideo/model_training/full/accelerate_config_14B.yaml \
   examples/wanvideo/model_training/train.py \
   --dataset_base_path ./models/train/Wan2.1-Fun-V1.1-14B-InP_full_split_cache \
   --data_file_keys "video,flow_line" \
@@ -29,6 +28,5 @@ nohup accelerate launch \
   --trainable_models "flow_line_adapter" \
   --extra_inputs "input_image,flow_line" \
   --task "sft:train" \
-  --offload_models "PAI/Wan2.1-Fun-V1.1-14B-InP:models_t5_umt5-xxl-enc-bf16.pth,PAI/Wan2.1-Fun-V1.1-14B-InP:Wan2.1_VAE.pth,PAI/Wan2.1-Fun-V1.1-14B-InP:models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth" \
   --initialize_model_on_cpu \
 > train2.log 2>&1 &

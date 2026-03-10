@@ -4,7 +4,6 @@ import numpy as np
 from einops import repeat, reduce
 from typing import Union
 from ..core import AutoTorchModule, AutoWrappedLinear, load_state_dict, ModelConfig, parse_device_type
-from ..core.device.npu_compatible_device import get_device_type
 from ..utils.lora import GeneralLoRALoader
 from ..models.model_loader import ModelPool
 from ..utils.controlnet import ControlNetInput
@@ -62,7 +61,7 @@ class BasePipeline(torch.nn.Module):
 
     def __init__(
         self,
-        device=get_device_type(), torch_dtype=torch.float16,
+        device="cuda", torch_dtype=torch.float16,
         height_division_factor=64, width_division_factor=64,
         time_division_factor=None, time_division_remainder=None,
     ):

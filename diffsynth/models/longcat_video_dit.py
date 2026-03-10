@@ -9,7 +9,6 @@ import numpy as np
 import torch.nn.functional as F
 from einops import rearrange, repeat
 from .wan_video_dit import flash_attention
-from ..core.device.npu_compatible_device import get_device_type
 from ..core.gradient import gradient_checkpoint_forward
 
 
@@ -374,7 +373,7 @@ class FinalLayer_FP32(nn.Module):
         B, N, C = x.shape
         T, _, _ = latent_shape
 
-        with amp.autocast(get_device_type(), dtype=torch.float32):
+        with amp.autocast('cuda', dtype=torch.float32):
             shift, scale = self.adaLN_modulation(t).unsqueeze(2).chunk(2, dim=-1) # [B, T, 1, C]
             x = modulate_fp32(self.norm_final, x.view(B, T, -1, C), shift, scale).view(B, N, C)
             x = self.linear(x)
@@ -584,7 +583,7 @@ class LongCatSingleStreamBlock(nn.Module):
         T, _, _ = latent_shape # S != T*H*W in case of CP split on H*W.
 
         # compute modulation params in fp32
-        with amp.autocast(device_type=get_device_type(), dtype=torch.float32):
+        with amp.autocast(device_type='cuda', dtype=torch.float32):
             shift_msa, scale_msa, gate_msa, \
             shift_mlp, scale_mlp, gate_mlp = \
                 self.adaLN_modulation(t).unsqueeze(2).chunk(6, dim=-1) # [B, T, 1, C]
@@ -603,7 +602,7 @@ class LongCatSingleStreamBlock(nn.Module):
         else:
             x_s = attn_outputs
 
-        with amp.autocast(device_type=get_device_type(), dtype=torch.float32):
+        with amp.autocast(device_type='cuda', dtype=torch.float32):
             x = x + (gate_msa * x_s.view(B, -1, N//T, C)).view(B, -1, C) # [B, N, C]
         x = x.to(x_dtype)
 
@@ -616,7 +615,7 @@ class LongCatSingleStreamBlock(nn.Module):
         # ffn with modulation
         x_m = modulate_fp32(self.mod_norm_ffn, x.view(B, -1, N//T, C), shift_mlp, scale_mlp).view(B, -1, C)
         x_s = self.ffn(x_m)
-        with amp.autocast(device_type=get_device_type(), dtype=torch.float32):
+        with amp.autocast(device_type='cuda', dtype=torch.float32):
             x = x + (gate_mlp * x_s.view(B, -1, N//T, C)).view(B, -1, C) # [B, N, C]
         x = x.to(x_dtype)
 
@@ -798,7 +797,7 @@ class LongCatVideoTransformer3DModel(torch.nn.Module):
 
         hidden_states = self.x_embedder(hidden_states)  # [B, N, C]
 
-        with amp.autocast(device_type=get_device_type(), dtype=torch.float32):
+        with amp.autocast(device_type='cuda', dtype=torch.float32):
             t = self.t_embedder(timestep.float().flatten(), dtype=torch.float32).reshape(B, N_t, -1)  # [B, T, C_t]
 
         encoder_hidden_states = self.y_embedder(encoder_hidden_states)  # [B, 1, N_token, C]

@@ -9,10 +9,10 @@ import os
 
 # ================== 配置 ==================
 DEVISE = "cuda:0"
-input_folder = Path("data/test")          # 原始视频所在目录
+input_folder = Path("data/longtest")          # 原始视频所在目录
 flow_base = input_folder             # flow 的根目录（与 input_folder 同级）
 flow_subdir = Path("flow_line")            # flow 子目录名
-output_folder = Path("valid/full/e1")              # 输出目录
+output_folder = Path("valid/longtest")              # 输出目录
 
 # 确保输出目录存在
 output_folder.mkdir(exist_ok=True,parents=True)
@@ -35,7 +35,8 @@ pipe = WanVideoPipeline.from_pretrained(
 pipe.vram_management_enabled = True
 
 # 加载 flow_line_adapter 微调权重
-flow_state_dict = load_state_dict("models/train/Wan2.1-Fun-V1.1-14B-InP_full_split/epoch-1.safetensors")
+#"WanFlow/Wan2.1-Fun-V1.1-14B-InP/full/epoch-5.safetensors"
+flow_state_dict = load_state_dict("WanFlow/Wan2.1-Fun-V1.1-14B-InP/full/0309/epoch-3.safetensors")
 pipe.flow_line_adapter.load_state_dict(flow_state_dict)
 pipe.flow_line_adapter.to(DEVISE)  # 确保 adapter 在正确设备上
 

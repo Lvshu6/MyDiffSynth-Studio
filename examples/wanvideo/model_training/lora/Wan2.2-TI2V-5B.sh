@@ -2,7 +2,7 @@ nohup accelerate launch examples/wanvideo/model_training/train.py \
   --dataset_base_path data/track \
   --dataset_metadata_path data/track/config/metadata.csv \
   --data_file_keys "video,flow_line" \
-  --dataset_repeat 20 \
+  --dataset_repeat 10 \
   --model_id_with_origin_paths "Wan-AI/Wan2.2-TI2V-5B:diffusion_pytorch_model*.safetensors,Wan-AI/Wan2.2-TI2V-5B:models_t5_umt5-xxl-enc-bf16.pth,Wan-AI/Wan2.2-TI2V-5B:Wan2.2_VAE.pth" \
   --learning_rate 1e-5 \
   --num_epochs 25 \

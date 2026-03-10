@@ -6,7 +6,6 @@ from einops import rearrange, repeat
 import numpy as np
 from transformers import CLIPTokenizer, T5TokenizerFast
 
-from ..core.device.npu_compatible_device import get_device_type
 from ..diffusion import FlowMatchScheduler
 from ..core import ModelConfig, gradient_checkpoint_forward, load_state_dict
 from ..diffusion.base_pipeline import BasePipeline, PipelineUnit, ControlNetInput
@@ -56,7 +55,7 @@ class MultiControlNet(torch.nn.Module):
 
 class FluxImagePipeline(BasePipeline):
 
-    def __init__(self, device=get_device_type(), torch_dtype=torch.bfloat16):
+    def __init__(self, device="cuda", torch_dtype=torch.bfloat16):
         super().__init__(
             device=device, torch_dtype=torch_dtype,
             height_division_factor=16, width_division_factor=16,
@@ -118,7 +117,7 @@ class FluxImagePipeline(BasePipeline):
     @staticmethod
     def from_pretrained(
         torch_dtype: torch.dtype = torch.bfloat16,
-        device: Union[str, torch.device] = get_device_type(),
+        device: Union[str, torch.device] = "cuda",
         model_configs: list[ModelConfig] = [],
         tokenizer_1_config: ModelConfig = ModelConfig(model_id="black-forest-labs/FLUX.1-dev", origin_file_pattern="tokenizer/"),
         tokenizer_2_config: ModelConfig = ModelConfig(model_id="black-forest-labs/FLUX.1-dev", origin_file_pattern="tokenizer_2/"),
@@ -378,7 +377,7 @@ class FluxImageUnit_PromptEmbedder(PipelineUnit):
         text_encoder_2,
         prompt,
         positive=True,
-        device=get_device_type(),
+        device="cuda",
         t5_sequence_length=512,
     ):
         pooled_prompt_emb = self.encode_prompt_using_clip(prompt, text_encoder_1, tokenizer_1, 77, device)
@@ -559,7 +558,7 @@ class FluxImageUnit_EntityControl(PipelineUnit):
         text_encoder_2,
         prompt,
         positive=True,
-        device=get_device_type(),
+        device="cuda",
         t5_sequence_length=512,
     ):
         pooled_prompt_emb = self.encode_prompt_using_clip(prompt, text_encoder_1, tokenizer_1, 77, device)
@@ -794,7 +793,7 @@ class FluxImageUnit_ValueControl(PipelineUnit):
 
 
 class InfinitYou(torch.nn.Module):
-    def __init__(self, device=get_device_type(), torch_dtype=torch.bfloat16):
+    def __init__(self, device="cuda", torch_dtype=torch.bfloat16):
         super().__init__()
         from facexlib.recognition import init_recognition_model
         from insightface.app import FaceAnalysis
