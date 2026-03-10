@@ -13,9 +13,12 @@
 #   --task "sft:data_process" \
 #   --offload_models "PAI/Wan2.1-Fun-V1.1-14B-InP:diffusion_pytorch_model*.safetensors" \
 # > train1.log 2>&1 &
+
 # export CUDA_VISIBLE_DEVICES=4,5,6,7
+#--config_file examples/wanvideo/model_training/full/accelerate_config_14B.yaml
 
 nohup accelerate launch \
+  --config_file examples/wanvideo/model_training/full/accelerate_config_14B.yaml \
   examples/wanvideo/model_training/train.py \
   --dataset_base_path ./models/train/Wan2.1-Fun-V1.1-14B-InP_full_split_cache \
   --data_file_keys "video,flow_line" \
