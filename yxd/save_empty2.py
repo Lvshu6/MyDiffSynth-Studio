@@ -4,7 +4,7 @@ from typing import Tuple, Optional, List
 from einops import rearrange
 from safetensors.torch import save_file as save_safetensors
 from safetensors.torch import load_file as load_safetensors
-from diffsynth.models.wan_video_flow_line_adapter_new import WanFlowLineAdapter
+from diffsynth.models.wan_video_flow_line_adapter import WanFlowLineAdapter
 
 # -------------------------- 保存函数（支持 BFloat16） --------------------------
 def save_state_dict(
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     print("原始模型权重 dtype：", model.flow_line_patch_embedding.weight.dtype)  # 默认 float32
 
     # 2. 核心：以 BFloat16 格式保存为 safetensors（推荐）
-    safetensors_bf16_path = "models/FlowLineAdapter/flow_line_adapter_large.safetensors"
+    safetensors_bf16_path = "models/FlowLineAdapter/flow_line_adapter_ablation.safetensors"
     save_state_dict(
         state_dict=model.state_dict(),
         file_path=safetensors_bf16_path,

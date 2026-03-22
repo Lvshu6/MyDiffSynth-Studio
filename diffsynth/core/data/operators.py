@@ -1,6 +1,7 @@
 import torch, torchvision, imageio, os
 import imageio.v3 as iio
 from PIL import Image
+import numpy as np
 
 
 class DataProcessingPipeline:
@@ -133,7 +134,11 @@ class LoadVideo(DataProcessingOperator):
         reader.close()
         return frames
 
-
+class LoadNumpy(DataProcessingOperator):
+    def __call__(self, data: str):
+        npy_data = np.load(data)
+        return npy_data
+    
 class SequencialProcess(DataProcessingOperator):
     def __init__(self, operator=lambda x: x):
         self.operator = operator

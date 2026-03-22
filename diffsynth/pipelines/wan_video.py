@@ -1,5 +1,7 @@
 import cv2
 import torch, types
+import torch.nn.functional as F
+
 import numpy as np
 from PIL import Image
 from einops import repeat
@@ -78,7 +80,7 @@ class WanVideoPipeline(BasePipeline):
             WanVideoUnit_AnimateInpaint(),
             
             WanVideoUnit_FlowLine(),
-
+            WanVideoUnit_Track(),
             WanVideoUnit_VAP(),
             WanVideoUnit_UnifiedSequenceParallel(),
             WanVideoUnit_TeaCache(),
@@ -232,6 +234,7 @@ class WanVideoPipeline(BasePipeline):
         animate_mask_video: Optional[list[Image.Image]] = None,
         #FlowLine
         flow_line = None,
+        track=None,
         # VAP
         vap_video: Optional[list[Image.Image]] = None,
         vap_prompt: Optional[str] = " ",
@@ -302,7 +305,7 @@ class WanVideoPipeline(BasePipeline):
             "animate_pose_video": animate_pose_video, "animate_face_video": animate_face_video, "animate_inpaint_video": animate_inpaint_video, "animate_mask_video": animate_mask_video,
             
             "flow_line": flow_line,
-
+            "track" : track,
             "vap_video": vap_video, 
         }
         for unit in self.units:
@@ -1044,8 +1047,53 @@ class WanVideoUnit_FlowLine(PipelineUnit):
         flow_latents = pipe.vae.encode(flow_line, device=pipe.device, tiled=tiled, tile_size=tile_size, tile_stride=tile_stride).to(dtype=pipe.torch_dtype, device=pipe.device)
         return {"flow_latents": flow_latents}
 
+class WanVideoUnit_Track(PipelineUnit):
+    def __init__(self):
+        super().__init__(
+            input_params=("track", "tiled", "tile_size", "tile_stride", "height", "width"),
+            onload_model_names=("vae",)
+        )
+        
+    def process(self, pipe: WanVideoPipeline, track, tiled, tile_size, tile_stride,height,width):
+               
+        if track is None:
+            return {}
+        pipe.load_models_to_device(self.onload_model_names)
+        track =self.encode(track,height,width)
+        # flow_line = self.preprocess_video(flow_line, torch_dtype=pipe.torch_dtype, device=pipe.device)
+        flow_latents = pipe.vae.encode(track, device=pipe.device, tiled=tiled, tile_size=tile_size, tile_stride=tile_stride).to(dtype=pipe.torch_dtype, device=pipe.device)
+        return {"flow_latents": flow_latents}
+    
+    def encode(self, trajs,height,width):
 
+        B, T, N, _ = trajs.shape
+        traj_emb_3 = torch.randn(B, N, 3, device=trajs.device) * 0.02   #高斯方差0.02
+        traj_emb_3 = F.normalize(traj_emb_3, dim=-1)
+        
+        cond_map_temp = torch.zeros(B, T, height,width, 3, device=trajs.device)
+        
 
+        trajs_int = torch.round(trajs).long()  # [B, T, N, 2]
+        # 边界过滤（仅保留画面内的坐标）
+        x = trajs_int[..., 0]  # [B, T, N]
+        y = trajs_int[..., 1]  # [B, T, N]
+        valid_mask = (x >= 0) & (x < width) & (y >= 0) & (y < height)  # [B, T, N]
+        
+        # 向量化写入（无循环，高效）
+        b_idx, t_idx, n_idx = torch.where(valid_mask > 0)
+        if len(b_idx) > 0:
+            valid_x = x[b_idx, t_idx, n_idx]
+            valid_y = y[b_idx, t_idx, n_idx]
+            valid_emb = traj_emb_3[b_idx, n_idx]  # [num_valid, 3]
+            
+            # 写入条件图（累加处理轨迹重叠）
+            cond_map_temp[b_idx, t_idx, valid_y, valid_x] += valid_emb
+        
+        # -------------------------- 步骤4：维度转换为 (B, 3, T, H, W) --------------------------
+        cond_map = cond_map_temp.permute(0, 4, 1, 2, 3)  # [B, 3, T, H, W]
+        
+        return cond_map
+    
 class WanVideoUnit_LongCatVideo(PipelineUnit):
     def __init__(self):
         super().__init__(
@@ -1061,7 +1109,6 @@ class WanVideoUnit_LongCatVideo(PipelineUnit):
         longcat_video = pipe.preprocess_video(longcat_video)
         longcat_latents = pipe.vae.encode(longcat_video, device=pipe.device).to(dtype=pipe.torch_dtype, device=pipe.device)
         return {"longcat_latents": longcat_latents}
-
 
 class TeaCache:
     def __init__(self, num_inference_steps, rel_l1_thresh, model_id):

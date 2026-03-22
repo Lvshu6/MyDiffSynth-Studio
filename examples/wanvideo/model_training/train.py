@@ -1,6 +1,6 @@
 import torch, os, argparse, accelerate, warnings
 from diffsynth.core import UnifiedDataset
-from diffsynth.core.data.operators import LoadVideo, LoadAudio, ImageCropAndResize, ToAbsolutePath
+from diffsynth.core.data.operators import LoadVideo, LoadAudio, ImageCropAndResize, ToAbsolutePath,LoadNumpy
 from diffsynth.pipelines.wan_video import WanVideoPipeline, ModelConfig
 from diffsynth.diffusion import *
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -146,6 +146,9 @@ if __name__ == "__main__":
         special_operator_map={
             "animate_face_video": ToAbsolutePath(args.dataset_base_path) >> LoadVideo(args.num_frames, 4, 1, frame_processor=ImageCropAndResize(512, 512, None, 16, 16)),
             "input_audio": ToAbsolutePath(args.dataset_base_path) >> LoadAudio(sr=16000),
+            "flow_line": ToAbsolutePath(args.dataset_base_path) >>  LoadVideo(args.num_frames, 4, 1, frame_processor=ImageCropAndResize(None,None, args.max_pixels,division_factor,division_factor)),
+            "track": ToAbsolutePath(args.dataset_base_path) >> LoadNumpy()
+
         }
     )
     model = WanTrainingModule(
